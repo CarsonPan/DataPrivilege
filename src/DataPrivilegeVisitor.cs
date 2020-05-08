@@ -17,10 +17,10 @@ namespace DataPrivilege
 {
 
     public class DataPrivilegeVisitor<TDbContext, TEntity> : DataPrivilegeBaseVisitor<Expression>
-        where TDbContext:DbContext
-        where TEntity:class
+        where TDbContext : DbContext
+        where TEntity : class
     {
-        
+
         public IDictionary<string, object> Parameters { get; set; }
         public TDbContext DbContext { get; set; }
         protected List<Exception> Exceptions = new List<Exception>();
@@ -131,10 +131,18 @@ namespace DataPrivilege
         {
             AddExceptionIfExists(context);
             bool not = context.NOT() != null;
+            var subqueryContext = context.simpleSubquery();
+            Expression expression = VisitSimpleSubquery(subqueryContext);
+            Expression predicateExpression = ((expression as MethodCallExpression).Arguments[0] as MethodCallExpression).Arguments[1];
+            Expression subTableExpression = ((expression as MethodCallExpression).Arguments[0] as MethodCallExpression).Arguments[0];
+            MethodInfo anyMethod = typeof(Queryable).GetMethods().FirstOrDefault(m => m.Name == "Any" && m.GetParameters().Length == 2);
+            anyMethod = anyMethod.MakeGenericMethod(subTableExpression.Type.GenericTypeArguments[0]);
+            expression = Expression.Call(anyMethod, subTableExpression, predicateExpression);
             if (not)
             {
+                expression = Expression.Not(expression);
             }
-            return base.VisitExistsExpression(context);
+            return expression;
         }
         private void Convert(ref Expression left, ref Expression right)
         {
@@ -213,11 +221,11 @@ namespace DataPrivilege
             }
             return expression;
         }
-       
-     
+
+
         private Expression GetTableExpression(string tableName)
         {
-            IEnumerable<PropertyInfo> propertyInfos = typeof(TDbContext).GetProperties(BindingFlags.Public)
+            IEnumerable<PropertyInfo> propertyInfos = typeof(TDbContext).GetProperties()
                                                                        .Where(p => p.PropertyType.IsGenericType
                                                                               && p.PropertyType.GetGenericTypeDefinition() == typeof(DbSet<>));
 
@@ -226,16 +234,16 @@ namespace DataPrivilege
                 Type entityType = p.PropertyType.GenericTypeArguments[0];
                 return DbContext.Model.FindEntityType(entityType)?.GetTableName().ToLower() == tableName.ToLower();
             });
-            if(p==null)
+            if (p == null)
             {
                 throw new Exception($"表名{tableName}无效！");
             }
-            return Expression.Property(Expression.PropertyOrField(Expression.Constant(this), "DbContext"),p);
+            return Expression.Property(Expression.PropertyOrField(Expression.Constant(this), "DbContext"), p);
         }
 
-       
 
-        private  IProperty GetProperty(string tableName, string columnName)
+
+        private IProperty GetProperty(string tableName, string columnName)
         {
             IEnumerable<PropertyInfo> propertyInfos = typeof(TDbContext).GetProperties()
                                                                        .Where(p => p.PropertyType.IsGenericType
@@ -251,7 +259,7 @@ namespace DataPrivilege
                 return null;
             }
             var entity = DbContext.Model.FindEntityType(p.PropertyType.GenericTypeArguments[0]);
-            IProperty columnProperty=  entity.GetProperties().FirstOrDefault(p => p.GetColumnName().ToLower() == columnName.ToLower());
+            IProperty columnProperty = entity.GetProperties().FirstOrDefault(p => p.GetColumnName().ToLower() == columnName.ToLower());
             return columnProperty;
         }
         public override Expression VisitColumnElem(DataPrivilegeParser.ColumnElemContext context)
@@ -264,14 +272,15 @@ namespace DataPrivilege
                 aliasTableName = context.ID(0).GetText();
                 colName = context.ID(1).GetText();
             }
-            else {
+            else
+            {
                 colName = context.ID(0).GetText();
             }
-            Expression parameter =null;
+            Expression parameter = null;
             IProperty property = null;
             if (aliasTableName == null)
             {
-                
+
                 for (int i = _tableContainer.Count - 1; i >= 0; i--)
                 {
                     property = GetProperty(_tableContainer[i].TableName, colName);
@@ -281,13 +290,13 @@ namespace DataPrivilege
                         break;
                     }
                 }
-               
+
             }
             else
             {
-                for (int i=_tableContainer.Count-1;i>=0;i--)
+                for (int i = _tableContainer.Count - 1; i >= 0; i--)
                 {
-                    if(_tableContainer[i].AliasName== aliasTableName)
+                    if (_tableContainer[i].AliasName == aliasTableName)
                     {
                         parameter = _tableContainer[i].Parameter;
                         property = GetProperty(_tableContainer[i].TableName, colName);
@@ -309,7 +318,7 @@ namespace DataPrivilege
 
         private static Expression GetPropertyExpression(string colName, Expression parameter, IProperty property)
         {
-            
+
             if (property.IsShadowProperty())
             {
                 MethodInfo propertyMethod = typeof(EF).GetMethod("Property");
@@ -357,19 +366,20 @@ namespace DataPrivilege
             var binayContext = context.BINARY();
             if (binayContext != null)
             {
-                string binaryString= binayContext.GetText();
+                string binaryString = binayContext.GetText();
                 binaryString = binaryString.Substring(2);
                 byte[] data = new byte[binaryString.Length];
-                for(int i=0;i<binaryString.Length;i++)
+                for (int i = 0; i < binaryString.Length; i++)
                 {
-                    if(binaryString[i]<65)
+                    if (binaryString[i] < 65)
                     {
                         data[i] = (byte)(binaryString[i] - 48);
                     }
-                    else if(binaryString[i]<97)
+                    else if (binaryString[i] < 97)
                     {
                         data[i] = (byte)(binaryString[i] - 55);
-                    }else
+                    }
+                    else
                     {
                         data[i] = (byte)(binaryString[i] - 87);
                     }
@@ -401,6 +411,7 @@ namespace DataPrivilege
         {
             AddExceptionIfExists(context);
             string customField = context.GetText();
+            customField = customField.Substring(1, customField.Length - 2);
             Expression expression = GetCustomFieldValueExpression(customField);
             if (!CustomFields.Contains(customField))
             {
@@ -490,7 +501,7 @@ namespace DataPrivilege
                 set = VisitSimpleSubquery(context.simpleSubquery());
                 containsMethod = typeof(Queryable).GetMethods().FirstOrDefault(m => m.Name == "Contains" && m.GetParameters()?.Length == 2);
                 containsMethod = containsMethod.MakeGenericMethod(item.Type);
-                Expression expression= Expression.Call(containsMethod, set, item);
+                Expression expression = Expression.Call(containsMethod, set, item);
                 if (isNot)
                 {
                     expression = Expression.Not(expression);
@@ -515,14 +526,14 @@ namespace DataPrivilege
         {
             AddExceptionIfExists(context);
             bool isNot = context.ChildCount == 4;
-            Expression expression=VisitExpression(context.expression());
-            if(expression.Type!=typeof(string))
+            Expression expression = VisitExpression(context.expression());
+            if (expression.Type != typeof(string))
             {
                 Exceptions.Add(new Exception(" like 表达式只能作用于字符串类型"));
                 return Expression.Constant(true);
             }
-            MethodInfo containsMethod = typeof(string).GetMethod("Contains",new Type[] {typeof(string)});
-            expression= Expression.Call(expression, containsMethod, Expression.Constant(context.STRING()));
+            MethodInfo containsMethod = typeof(string).GetMethod("Contains", new Type[] { typeof(string) });
+            expression = Expression.Call(expression, containsMethod, Expression.Constant(context.STRING()));
             if (isNot)
             {
                 expression = Expression.Not(expression);
@@ -544,35 +555,30 @@ namespace DataPrivilege
             AddExceptionIfExists(context);
             var tableNameContext = context.tableName();
             Expression tableExpression = VisitTableName(tableNameContext);
-            var columnElemContext= context.columnElem();
-            var columnExpression= VisitColumnElem(columnElemContext);
-            var searchConditionContext= context.searchCondition();
+            var columnElemContext = context.columnElem();
+            var columnExpression = VisitColumnElem(columnElemContext);
+            var searchConditionContext = context.searchCondition();
             Type entityType = tableExpression.Type.GetGenericArguments()[0];
             ParameterExpression parameter = _tableContainer[_tableContainer.Count - 1].Parameter;
-            if (searchConditionContext!=null)
+            if (searchConditionContext != null)
             {
-                Type expressionType = typeof(Expression<>).MakeGenericType(typeof(Func<,>).MakeGenericType(entityType,typeof(bool)));
-                MethodInfo whereMethod =typeof(Queryable).GetMethods().FirstOrDefault(m => {
-                      if(m.Name!="Where")
+                Type expressionType = typeof(Expression<>).MakeGenericType(typeof(Func<,>).MakeGenericType(entityType, typeof(bool)));
+                MethodInfo whereMethod = typeof(Queryable).GetMethods().FirstOrDefault(m => {
+                    if (m.Name != "Where")
                     {
                         return false;
                     }
-                    var parameters= m.GetParameters();
+                    var parameters = m.GetParameters();
                     if (parameters.Length != 2)
                     {
                         return false;
                     }
-                    var generocTypes=  parameters[1].ParameterType.GenericTypeArguments;
-                    if(generocTypes?.Length!=1)
-                    {
-                        return false;
-                    }
-                    generocTypes = generocTypes[0].GenericTypeArguments;
+                    var generocTypes = parameters[1].ParameterType.GenericTypeArguments;
                     if (generocTypes?.Length != 1)
                     {
                         return false;
                     }
-                    if(generocTypes[0].Name!= "Func`2")
+                    if (generocTypes[0].Name != "Func`2")
                     {
                         return false;
                     }
@@ -581,51 +587,48 @@ namespace DataPrivilege
                 whereMethod = whereMethod.MakeGenericMethod(entityType);
                 Expression expression = VisitSearchCondition(searchConditionContext);
                 Type delegateType = typeof(Func<,>).MakeGenericType(entityType, typeof(bool));
-                Expression predicateExpession= Expression.Lambda(delegateType,expression,parameter);
-                tableExpression=Expression.Call(whereMethod, tableExpression, predicateExpession);
+                Expression predicateExpession = Expression.Lambda(delegateType, expression, parameter);
+                tableExpression = Expression.Call(whereMethod, tableExpression, predicateExpession);
             }
             MethodInfo selectMethod = typeof(Queryable).GetMethods().FirstOrDefault(m => {
-                     if (m.Name != "Select")
-                     {
-                         return false;
-                     }
-                     var parameters = m.GetParameters();
-                     if (parameters.Length != 2)
-                     {
-                         return false;
-                     }
-                     var generocTypes = parameters[1].ParameterType.GenericTypeArguments;
-                     if (generocTypes?.Length != 1)
-                     {
-                         return false;
-                     }
-                     generocTypes = generocTypes[0].GenericTypeArguments;
-                     if (generocTypes?.Length != 1)
-                     {
-                         return false;
-                     }
-                     if (generocTypes[0].Name != "Func`2")
-                     {
-                         return false;
-                     }
-                     return true;
-                 });
+                if (m.Name != "Select")
+                {
+                    return false;
+                }
+                var parameters = m.GetParameters();
+                if (parameters.Length != 2)
+                {
+                    return false;
+                }
+                var generocTypes = parameters[1].ParameterType.GenericTypeArguments;
+                if (generocTypes?.Length != 1)
+                {
+                    return false;
+                }
+
+                if (generocTypes[0].Name != "Func`2")
+                {
+                    return false;
+                }
+                return true;
+            });
             Expression selectLambda = Expression.Lambda(typeof(Func<,>).MakeGenericType(entityType, columnExpression.Type), columnExpression, parameter);
-           Expression dataExpression=  Expression.Call(selectMethod, tableExpression, selectLambda);
+            selectMethod = selectMethod.MakeGenericMethod(entityType, columnExpression.Type);
+            Expression dataExpression = Expression.Call(selectMethod, tableExpression, selectLambda);
             _tableContainer.RemoveAt(_tableContainer.Count - 1);
             return dataExpression;
         }
 
-        public override Expression VisitTableName( DataPrivilegeParser.TableNameContext context)
+        public override Expression VisitTableName(DataPrivilegeParser.TableNameContext context)
         {
             AddExceptionIfExists(context);
-            var tableNames= context.ID();
+            var tableNames = context.ID();
             string tableName = tableNames[0].GetText();
             string aliasName = tableNames.Length == 2 ? tableNames[1].GetText() : tableName;
-            Expression expression= GetTableExpression(tableName);
-            Type entityType= expression.Type.GenericTypeArguments[0];
-            ParameterExpression parameter= Expression.Parameter(entityType, $"_p{_tableContainer.Count}");
-            _tableContainer.Add((aliasName,tableName, parameter));
+            Expression expression = GetTableExpression(tableName);
+            Type entityType = expression.Type.GenericTypeArguments[0];
+            ParameterExpression parameter = Expression.Parameter(entityType, $"_p{_tableContainer.Count}");
+            _tableContainer.Add((aliasName, tableName, parameter));
             return expression;
         }
 
@@ -638,18 +641,19 @@ namespace DataPrivilege
         {
             Expression<Func<TEntity, bool>> predicate = null;
             IList<Exception> exceptions = null;
+            IList<string> customFields = null;
             try
             {
                 ICharStream charStream = new AntlrInputStream(conditionExpression);
-                DataPrivilegeLexer dataPrivilegeLexer = new DataPrivilegeLexer(charStream);
+                DataPrivilegeLexer dataPrivilegeParserLexer = new DataPrivilegeLexer(charStream);
                 DataPrivilegeErrotListener errorListener = new DataPrivilegeErrotListener();
-                dataPrivilegeLexer.RemoveErrorListeners();
-                dataPrivilegeLexer.AddErrorListener(errorListener);
-                CommonTokenStream commonTokenStream = new CommonTokenStream(dataPrivilegeLexer);
-                DataPrivilegeParser dataPrivilegeParser = new DataPrivilegeParser(commonTokenStream);
-                dataPrivilegeParser.RemoveErrorListeners();
-                dataPrivilegeParser.AddErrorListener(errorListener);
-                IParseTree tree = dataPrivilegeParser.searchCondition();
+                dataPrivilegeParserLexer.RemoveErrorListeners();
+                dataPrivilegeParserLexer.AddErrorListener(errorListener);
+                CommonTokenStream commonTokenStream = new CommonTokenStream(dataPrivilegeParserLexer);
+                DataPrivilegeParser dataPrivilegeParserParser = new DataPrivilegeParser(commonTokenStream);
+                dataPrivilegeParserParser.RemoveErrorListeners();
+                dataPrivilegeParserParser.AddErrorListener(errorListener);
+                IParseTree tree = dataPrivilegeParserParser.searchCondition();
                 if (errorListener.Exceptions.Count != 0)
                 {
                     Exceptions.AddRange(errorListener.Exceptions);
@@ -667,12 +671,13 @@ namespace DataPrivilege
             finally
             {
                 exceptions = Exceptions.ToList();
+                customFields = CustomFields.ToList();
                 _tableContainer.Clear();
                 Exceptions.Clear();
                 CustomFields.Clear();
             }
 
-            return new VisitResult<TEntity>(predicate, exceptions, CustomFields);
+            return new VisitResult<TEntity>(predicate, exceptions, customFields);
         }
         private class DataPrivilegeErrotListener : IAntlrErrorListener<IToken>, IAntlrErrorListener<int>
         {
@@ -680,12 +685,12 @@ namespace DataPrivilege
             public void SyntaxError(TextWriter output, IRecognizer recognizer, IToken offendingSymbol, int line, int charPositionInLine, string msg, RecognitionException e)
             {
                 //Exceptions.Add(e);
-                Exceptions.Add(new Exception($"[行:{line}，{charPositionInLine}] {offendingSymbol}:{msg}",e));
+                Exceptions.Add(new Exception($"[行:{line}，{charPositionInLine}] {offendingSymbol}:{msg}", e));
             }
 
             public void SyntaxError(TextWriter output, IRecognizer recognizer, int offendingSymbol, int line, int charPositionInLine, string msg, RecognitionException e)
             {
-                Exceptions.Add(new Exception($"[行:{line}，{charPositionInLine}] {offendingSymbol}:{msg}",e));
+                Exceptions.Add(new Exception($"[行:{line}，{charPositionInLine}] {offendingSymbol}:{msg}", e));
             }
         }
 
