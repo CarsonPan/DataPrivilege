@@ -14,11 +14,11 @@ namespace DataPrivilege.Converters
         {
             if(LeftIndex<RightIndex)
             {
-                right = Expression.Convert(right, left.Type);
+                right = Expression.ConvertChecked(right, left.Type);
             }
             else
             {
-                left = Expression.Convert(left, right.Type);
+                left = Expression.ConvertChecked(left, right.Type);
             }
         }
 
