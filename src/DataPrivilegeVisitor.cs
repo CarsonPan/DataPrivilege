@@ -394,7 +394,8 @@ namespace DataPrivilege
         {
             var parameters = Expression.PropertyOrField(Expression.Constant(this), "Parameters");
             var parameterValue = Expression.Call(parameters, typeof(IDictionary<string, object>).GetMethod("get_Item"), Expression.Constant(customFieldName));
-            return Expression.Constant(parameterValue, DataPrivilegeFieldProvider.GetFieldType(customFieldName));
+            Type type = DataPrivilegeFieldProvider.GetFieldType(customFieldName);
+            return Expression.ConvertChecked(parameterValue, type);
         }
         public override Expression VisitCustomField(DataPrivilegeParser.CustomFieldContext context)
         {
