@@ -24,6 +24,8 @@ namespace DataPrivilege.Converters
 
         public virtual bool IsEffective(Expression left, Expression right)
         {
+            LeftIndex = -1;
+            RightIndex = -1;
             Type leftType = left.Type;
             Type rightType = right.Type;
             for(int i=0;i<Types.Length;i++)
