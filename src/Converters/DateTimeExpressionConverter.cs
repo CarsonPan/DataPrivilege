@@ -17,7 +17,7 @@ namespace DataPrivilege.Converters
                 {
                     return true;
                 }
-                if(LeftIndex>RightIndex)
+                if(LeftIndex<RightIndex)
                 {
                     if(left.Type.IsGenericType)
                     {
