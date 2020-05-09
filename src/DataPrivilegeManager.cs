@@ -2,6 +2,7 @@
 using Antlr4.Runtime.Tree;
 using DataPrivilege.DataPrivilegeFields;
 using DataPrivilege.Models;
+using DataPrivilege.Repositories;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -12,48 +13,52 @@ using System.Text;
 
 namespace DataPrivilege
 {
-    public class DataPrivilegeManager<TDbContext,TEntity> : IDataPrivilegeManager<TEntity>
+    public class DataPrivilegeManager<TDbContext,TEntity, TRule, TRuleRole, TRuleUser> : IDataPrivilegeManager<TEntity>
         where TDbContext:DbContext
         where TEntity:class
+        where TRule : DataPrivilegeRule
+        where TRuleRole : DataPrivilegeRuleRole<TRule>
+        where TRuleUser : DataPrivilegeRuleUser<TRule>
     {
-        protected readonly IDataPriviegeRepository DataPriviegeRepository;
         protected readonly TDbContext DbContext;
         protected readonly IDataPrivilegeFieldProvider DataPrivilegeFieldProvider;
-        protected readonly IUserAccessor UserAccessor;
+        protected readonly IUserSessionInfo UserSessionInfo;
         protected readonly DataPrivilegeVisitor<TDbContext, TEntity> DataPrivilegeVisitor;
-
-        public DataPrivilegeManager(IDataPriviegeRepository dataPriviegeRepository, 
+        protected readonly IDataPriviegeRepository<TRule, TRuleRole, TRuleUser> DataPriviegeRepository;
+        public DataPrivilegeManager(IDataPriviegeRepository<TRule, TRuleRole, TRuleUser> dataPriviegeRepository,
                                     TDbContext dbContext, 
                                     IDataPrivilegeFieldProvider dataPrivilegeFieldProvider,
-                                    IUserAccessor userAccessor,
+                                    IUserSessionInfo userSessionInfo,
                                     DataPrivilegeVisitor<TDbContext, TEntity> dataPrivilegeVisitor)
         {
-            DataPriviegeRepository = dataPriviegeRepository;
             DbContext = dbContext;
             DataPrivilegeFieldProvider = dataPrivilegeFieldProvider;
-            UserAccessor = userAccessor;
+            UserSessionInfo = userSessionInfo;
             DataPrivilegeVisitor = dataPrivilegeVisitor;
+            DataPriviegeRepository = dataPriviegeRepository;
         }
 
         private IEnumerable<string> GetRoleIds()
         {
-            return UserAccessor.User?.FindFirst(ClaimTypes.Role)?.Value?.Split(',');
+            return UserSessionInfo.RoleIds;
+           // return UserAccessor.User?.FindFirst(ClaimTypes.Role)?.Value?.Split(',');
         }
 
         private string GetUserId()
         {
-            return UserAccessor.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return UserSessionInfo.UserId;
+           // return UserAccessor.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
         
-        private List<DataPrivilegeRule> GetDataPriviegeRules(DataOperation dataOperation)
+        private List<TRule> GetDataPriviegeRules(DataOperation dataOperation)
         {
             string tableName= DbContext.Model.FindEntityType(typeof(TEntity))?.GetTableName();
             string userId = GetUserId();
-            IEnumerable<DataPrivilegeRuleUser> ruleUsers = DataPriviegeRepository.GetDataPriviegeRuleUserByUserId(tableName,userId);
+            IEnumerable<TRuleUser> ruleUsers = DataPriviegeRepository.GetDataPriviegeRuleUserByUserId(tableName,userId);
             IEnumerable<string> roleIds = GetRoleIds();
-            IEnumerable<DataPrivilegeRuleRole> ruleRoles= DataPriviegeRepository.GetDataPriviegeRuleRoleByRoleId(tableName,roleIds);
-            List<DataPrivilegeRule> rules = new List<DataPrivilegeRule>();
-            IEnumerable<DataPrivilegeRule> temp = null;
+            IEnumerable<TRuleRole> ruleRoles = DataPriviegeRepository.GetDataPriviegeRuleRoleByRoleId(tableName,roleIds);
+            List<TRule> rules = new List<TRule>();
+            IEnumerable<TRule> temp = null;
             if (ruleUsers!=null&&ruleUsers.Any())
             {
                 temp = ruleUsers.Where(ru => ru.DataOperation.HasFlag(dataOperation)).Select(ru => ru.DataPriviegeRule);
@@ -78,7 +83,7 @@ namespace DataPrivilege
         /// </summary>
         /// <param name="rules">表达式一样就认为为同一规则</param>
         /// <returns></returns>
-        protected List<DataPrivilegeRule> GetEffectiveRules(List<DataPrivilegeRule> rules)
+        protected List<TRule> GetEffectiveRules(List<TRule> rules)
         {
             if(rules.Count==0)
             {
@@ -88,15 +93,15 @@ namespace DataPrivilege
             {
                 return rules;
             }
-            List<DataPrivilegeRule> result = new List<DataPrivilegeRule>();
+            List<TRule> result = new List<TRule>();
             bool  exist = false;
-            foreach (DataPrivilegeRule rule in rules)
+            foreach (TRule rule in rules)
             {
                 if(string.IsNullOrWhiteSpace(rule.ConditionExpression))
                 {
                     continue;
                 }
-                foreach(DataPrivilegeRule _rule in result)
+                foreach(TRule _rule in result)
                 {
                     if(rule.ConditionExpression.Trim().ToUpper()==_rule.ConditionExpression.Trim().ToUpper())
                     {
@@ -113,20 +118,20 @@ namespace DataPrivilege
             return result;
         }
 
-        private DataPrivilegeContext<TDbContext, TEntity> CreateDataPrivilegeContext(DataOperation dataOperation)
+        private DataPrivilegeContext<TDbContext, TEntity,TRule> CreateDataPrivilegeContext(DataOperation dataOperation)
         {
             var rules = GetDataPriviegeRules(dataOperation);
             if (rules == null||rules.Count==0)
             {
                 return null;
             }
-            return new DataPrivilegeContext<TDbContext, TEntity>(rules,DbContext,DataPrivilegeFieldProvider, DataPrivilegeVisitor);
+            return new DataPrivilegeContext<TDbContext, TEntity,TRule>(rules,DbContext,DataPrivilegeFieldProvider, DataPrivilegeVisitor);
         }
         
 
         public IQueryable<TEntity> Filter(IQueryable<TEntity> entities)
         {
-            DataPrivilegeContext<TDbContext, TEntity> context = CreateDataPrivilegeContext(DataOperation.Read);
+            DataPrivilegeContext<TDbContext, TEntity,TRule> context = CreateDataPrivilegeContext(DataOperation.Read);
             if(context!=null)
             {
                 return context.Filter(entities);
@@ -136,7 +141,7 @@ namespace DataPrivilege
 
         public IEnumerable<TEntity> Filter(IEnumerable<TEntity> entities)
         {
-            DataPrivilegeContext<TDbContext, TEntity> context = CreateDataPrivilegeContext(DataOperation.Read);
+            DataPrivilegeContext<TDbContext, TEntity,TRule> context = CreateDataPrivilegeContext(DataOperation.Read);
             if (context != null)
             {
                 return context.Filter(entities);
@@ -147,7 +152,7 @@ namespace DataPrivilege
         public IQueryable<TEntity> GetAll()
         {
             IQueryable<TEntity> table= DbContext.Set<TEntity>();
-            DataPrivilegeContext<TDbContext, TEntity> context = CreateDataPrivilegeContext(DataOperation.Read);
+            DataPrivilegeContext<TDbContext, TEntity,TRule> context = CreateDataPrivilegeContext(DataOperation.Read);
             if(context!=null)
             {
                table=  context.Filter(table);
@@ -157,7 +162,7 @@ namespace DataPrivilege
 
         public void CheckPermission(IEnumerable<TEntity> entities, DataOperation dataOperation)
         {
-            DataPrivilegeContext<TDbContext, TEntity> context = CreateDataPrivilegeContext(dataOperation);
+            DataPrivilegeContext<TDbContext, TEntity, TRule> context = CreateDataPrivilegeContext(dataOperation);
             if (context != null)
             {
                if(!context.CheckPermission(entities))
@@ -170,7 +175,7 @@ namespace DataPrivilege
 
         public void CheckPermission(TEntity entity, DataOperation dataOperation)
         {
-            DataPrivilegeContext<TDbContext, TEntity> context = CreateDataPrivilegeContext(dataOperation);
+            DataPrivilegeContext<TDbContext, TEntity, TRule> context = CreateDataPrivilegeContext(dataOperation);
             if (context != null)
             {
                 if (!context.CheckPermission(entity))

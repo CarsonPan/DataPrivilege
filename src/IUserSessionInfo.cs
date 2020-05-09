@@ -5,8 +5,9 @@ using System.Text;
 
 namespace DataPrivilege
 { 
-    public interface IUserAccessor
+    public interface IUserSessionInfo
     {
-        ClaimsPrincipal User { get; }
+        string UserId { get; }
+        IEnumerable<string> RoleIds { get; }
     }
 }

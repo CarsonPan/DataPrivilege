@@ -15,14 +15,15 @@ using System.Threading.Tasks;
 
 namespace DataPrivilege
 {
-    public class DataPrivilegeContext<TDbContext, TEntity>
+    public class DataPrivilegeContext<TDbContext, TEntity,TRule>
         where TDbContext : DbContext
         where TEntity : class
+        where TRule:DataPrivilegeRule
     {
         private static readonly ParameterExpression _parameterExpression = Expression.Parameter(typeof(TEntity), "_p");
         private static readonly ConcurrentDictionary<string, DataPrivilegeInfo<TEntity>> _cache = new ConcurrentDictionary<string, DataPrivilegeInfo<TEntity>>();
 
-        public IList<Exception> Vertify(DataPrivilegeRule rule)
+        public IList<Exception> Vertify(TRule rule)
         {
             if(_cache.TryGetValue(rule.ConditionExpression.ToUpper(),out DataPrivilegeInfo<TEntity> value))
             {
@@ -47,11 +48,11 @@ namespace DataPrivilege
             return null;
         }
         private readonly DataPrivilegeVisitor<TDbContext, TEntity> DataPrivilegeVisitor;
-        public List<DataPrivilegeRule> Rules { get; }
+        public List<TRule> Rules { get; }
         public TDbContext DbContext { get; }
 
         protected readonly IDataPrivilegeFieldProvider DataPrivilegeFieldProvider;
-        public DataPrivilegeContext(List<DataPrivilegeRule> rules,
+        public DataPrivilegeContext(List<TRule> rules,
                                     TDbContext dbContext,
                                     IDataPrivilegeFieldProvider dataPrivilegeFieldProvider,
                                     DataPrivilegeVisitor<TDbContext, TEntity> dataPrivilegeVisitor)
