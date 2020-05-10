@@ -62,6 +62,7 @@ namespace DataPrivilege.Converters
                     }
                 }
             }
+            
             return Expression.ConvertChecked(expression, type);
         }
         public override void Convert(ref Expression left, ref Expression right)
