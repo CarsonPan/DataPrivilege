@@ -11,8 +11,31 @@ namespace DataPrivilege.DataPrivilegeFields
 {
     public static class DataPrivilegeFieldManager
     {
-        private static readonly IDictionary<string, Type> _fieldServices = new Dictionary<string, Type>();
+        internal class DataPrivilegeFieldTypeContainer : Dictionary<string, Type>
+        { }
+        private static object root = new object();
+        private static DataPrivilegeFieldTypeContainer GetContainer(this IServiceCollection services)
+        {
+            ServiceDescriptor serviceDescriptor= services.SingleOrDefault(sd => sd.ServiceType == typeof(DataPrivilegeFieldTypeContainer) && sd.Lifetime == ServiceLifetime.Singleton);
+            if(serviceDescriptor==null)
+            {
+                lock(root)
+                {
+                    serviceDescriptor = services.SingleOrDefault(sd => sd.ServiceType == typeof(DataPrivilegeFieldTypeContainer) && sd.Lifetime == ServiceLifetime.Singleton);
+                    if(serviceDescriptor==null)
+                    {
+                        serviceDescriptor = ServiceDescriptor.Singleton(typeof(DataPrivilegeFieldTypeContainer), new DataPrivilegeFieldTypeContainer());
+                        services.Add(serviceDescriptor);
+                    }
+                }
+            }
+            return serviceDescriptor.ImplementationInstance as DataPrivilegeFieldTypeContainer;
+        }
 
+        private static DataPrivilegeFieldTypeContainer GetContainer(this IServiceProvider serviceProvider)
+        {
+            return serviceProvider.GetRequiredService<DataPrivilegeFieldTypeContainer>();
+        }
         /// <summary>
         /// 获取字段服务实例
         /// </summary>
@@ -21,7 +44,7 @@ namespace DataPrivilege.DataPrivilegeFields
         /// <returns></returns>
         public static IDataPrivilegeField GetField(this IServiceProvider serviceProvider, string fieldName)
         {
-            if(_fieldServices.TryGetValue(fieldName,out Type type))
+            if(serviceProvider.GetContainer().TryGetValue(fieldName,out Type type))
             {
                 return serviceProvider.GetService(type) as IDataPrivilegeField;
             }
@@ -66,10 +89,10 @@ namespace DataPrivilege.DataPrivilegeFields
                 {
 
                     attribute = type.GetCustomAttribute<DataPrivilegeFieldAttribute>();
-                    if (!_fieldServices.ContainsKey(attribute.FieldName))
+                    if (!services.GetContainer().ContainsKey(attribute.FieldName))
                     {
                         services.Add(new ServiceDescriptor(type, type, attribute.ServiceLifetime));
-                        _fieldServices.Add(attribute.FieldName, type);
+                        services.GetContainer().Add(attribute.FieldName, type);
                     }
                     else
                     {

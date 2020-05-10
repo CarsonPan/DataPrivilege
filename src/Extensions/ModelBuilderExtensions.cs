@@ -33,7 +33,7 @@ namespace DataPrivilege.Extensions
                 b.Property<string>(t => t.RoleId).HasMaxLength(50).IsRequired();
                 b.Property<string>(t => t.TableName).HasMaxLength(150).IsRequired();
                 b.Property<DataOperation>(t => t.DataOperation).IsRequired();
-                b.HasOne<TRule>().WithMany();
+                b.HasOne<TRule>(t=>t.DataPriviegeRule).WithMany();
                 ruleRoleBuildAction?.Invoke(b);
             });
 
@@ -42,7 +42,7 @@ namespace DataPrivilege.Extensions
                 b.Property<string>(t => t.UserId).HasMaxLength(50).IsRequired();
                 b.Property<string>(t => t.TableName).HasMaxLength(150).IsRequired();
                 b.Property<DataOperation>(t => t.DataOperation).IsRequired();
-                b.HasOne<TRule>().WithMany();
+                b.HasOne<TRule>(t => t.DataPriviegeRule).WithMany();
                 ruleUserBuildAction?.Invoke(b);
             });
         }
