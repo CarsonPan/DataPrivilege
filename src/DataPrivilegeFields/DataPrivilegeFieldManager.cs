@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -34,7 +35,13 @@ namespace DataPrivilege.DataPrivilegeFields
 
         private static DataPrivilegeFieldTypeContainer GetContainer(this IServiceProvider serviceProvider)
         {
-            return serviceProvider.GetRequiredService<DataPrivilegeFieldTypeContainer>();
+            return serviceProvider.GetService<DataPrivilegeFieldTypeContainer>()??new DataPrivilegeFieldTypeContainer();
+        }
+
+        public static IReadOnlyDictionary<string,Type> GetCustomFields(this IServiceProvider serviceProvider)
+        {
+            var container= serviceProvider.GetContainer();
+            return new ReadOnlyDictionary<string, Type>(container);
         }
         /// <summary>
         /// 获取字段服务实例

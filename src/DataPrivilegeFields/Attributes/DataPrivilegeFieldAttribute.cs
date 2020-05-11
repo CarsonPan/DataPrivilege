@@ -15,7 +15,11 @@ namespace DataPrivilege.DataPrivilegeFields.Attributes
             FieldName = fieldName;
         }
 
-
+       
         public ServiceLifetime ServiceLifetime = ServiceLifetime.Scoped;
+
+        public string Remarks { get; set; }
+
+        public string Module { get; set; }
     }
 }

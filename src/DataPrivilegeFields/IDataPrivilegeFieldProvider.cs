@@ -7,6 +7,8 @@ namespace DataPrivilege.DataPrivilegeFields
 {
     public interface IDataPrivilegeFieldProvider
     {
+        IEnumerable<DataPrivilegeFieldDescriptor> GetAllFields();
+        bool ContainsField(string fieldName);
         Type GetFieldType(string fieldName);
         object GetFieldValue(string fieldName);
     }
