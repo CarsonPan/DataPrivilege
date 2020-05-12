@@ -412,6 +412,10 @@ namespace DataPrivilege
             AddExceptionIfExists(context);
             string customField = context.GetText();
             customField = customField.Substring(1, customField.Length - 2);
+            if(!DataPrivilegeFieldProvider.ContainsField(customField))
+            {
+                Exceptions.Add(new Exception($"自定义权限字段{customField}不存在！"));
+            }
             Expression expression = GetCustomFieldValueExpression(customField);
             if (!CustomFields.Contains(customField))
             {
