@@ -59,7 +59,7 @@ namespace DataPrivilege
         {
             
             Rules = rules;
-            var comparer = new CommonComparer<DataPrivilegeRule>((x, y) => {
+            var comparer = new CommonComparer<TRule>((x, y) => {
                 int left = x.ConditionExpression.GetHashCode();
                 int right = y.ConditionExpression.GetHashCode();
                 return left.CompareTo(right);
@@ -70,28 +70,32 @@ namespace DataPrivilege
             DataPrivilegeVisitor = dataPrivilegeVisitor;
         }
 
-        private string GetCacheKey()
+        private string GetCacheKey(IList<TRule> rules)
         {
-            if (Rules.Count == 1)
+            if (rules.Count == 1)
             {
-                return Rules[0].ConditionExpression.ToUpper();
+                return GetCacheKey(rules[0]);
             }
            
             StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < Rules.Count; i++)
+            builder.Append(rules[0].TableName.ToUpper()).Append("-");
+            for (int i = 0; i < rules.Count; i++)
             {
-                builder.Append("(").Append(Rules[i].ConditionExpression).Append(")");
-                if (i != Rules.Count - 1)
+                builder.Append("(").Append(rules[i].ConditionExpression).Append(")");
+                if (i != rules.Count - 1)
                 {
                     builder.Append(" OR ");
                 }
             }
             return builder.ToString().ToUpper();
         }
-
-        public bool CheckAndReduceRule(DataPrivilegeRule rule,out IList<Exception> exceptions)
+        private string GetCacheKey(TRule rule)
         {
-            string cacheKey = rule.ConditionExpression.ToUpper();
+            return rule.TableName.ToUpper() + "-" + rule.ConditionExpression.ToUpper();
+        }
+        public bool CheckAndReduceRule(TRule rule,out IList<Exception> exceptions)
+        {
+            string cacheKey = GetCacheKey(rule);
             if(_cache.ContainsKey(cacheKey))
             {
                 exceptions = null;
@@ -109,14 +113,15 @@ namespace DataPrivilege
                 }
                 DataPrivilegeInfo<TEntity> result = new DataPrivilegeInfo<TEntity>(newExpression as Expression<Func<TEntity, bool>>, visitResult.CustomFields);
                
-                _cache.TryAdd(rule.ConditionExpression.ToUpper(), result); 
+                _cache.TryAdd(cacheKey, result); 
                   
             }
             return visitResult.Success;
         }
-        private DataPrivilegeInfo<TEntity> GetDataPrevilegeInfoByRule(DataPrivilegeRule rule)
+        private DataPrivilegeInfo<TEntity> GetDataPrevilegeInfoByRule(TRule rule)
         {
-            return _cache.GetOrAdd(rule.ConditionExpression.ToUpper(), _ =>
+            string cacheKey = GetCacheKey(rule);
+            return _cache.GetOrAdd(cacheKey, _ =>
             {
                 var visitResult = DataPrivilegeVisitor.Visit(rule.ConditionExpression);
                 if (!visitResult.Success)
@@ -159,12 +164,12 @@ namespace DataPrivilege
             {
                 return GetDataPrevilegeInfoByRule(Rules[0]);
             }
-            string key = GetCacheKey();
+            string key = GetCacheKey(Rules);
             return _cache.GetOrAdd(key, _ =>
             {
 
                 List<DataPrivilegeInfo<TEntity>> list = new List<DataPrivilegeInfo<TEntity>>(Rules.Count);
-                foreach (DataPrivilegeRule rule in Rules)
+                foreach (TRule rule in Rules)
                 {
                     list.Add(GetDataPrevilegeInfoByRule(rule));
                 }
