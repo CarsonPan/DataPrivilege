@@ -20,7 +20,9 @@ namespace DataPrivilege
         where TDbContext : DbContext
         where TEntity : class
     {
-
+        /// <summary>
+        /// 采用一个字典存储自定义字段结果，而不是把求值表达式添加到lambda中
+        /// </summary>
         public IDictionary<string, object> Parameters { get; set; }
         public TDbContext DbContext { get; set; }
         protected List<Exception> Exceptions = new List<Exception>();
@@ -278,6 +280,13 @@ namespace DataPrivilege
             }
             Expression parameter = null;
             IProperty property = null;
+            GetParameterAndProperty(aliasTableName, colName, ref parameter, ref property);
+            return GetPropertyExpression(parameter, property);
+
+        }
+
+        private void GetParameterAndProperty(string aliasTableName, string colName, ref Expression parameter, ref IProperty property)
+        {
             if (aliasTableName == null)
             {
 
@@ -312,15 +321,48 @@ namespace DataPrivilege
             {
                 throw new Exception($"列名{colName}无效！");
             }
-            return GetPropertyExpression(colName, parameter, property);
-
         }
 
-        private static Expression GetPropertyExpression(string colName, Expression parameter, IProperty property)
+        private static Expression GetPropertyExpression(Expression parameter, IProperty property)
         {
 
             if (property.IsShadowProperty())
             {
+                //var fk = property.GetContainingForeignKeys().FirstOrDefault();
+                //if (fk != null)
+                //{
+                //    PropertyInfo propertyInfo= fk.DependentToPrincipal.PropertyInfo;
+                //    //如果能找到对应的引用导航属性 那么生成类似 p.Prop.Id==xxx的linq 以便生成委托且正确运行
+                //    if (propertyInfo != null)
+                //    {
+                //        //根据阴影属性命名规则 找到 主体实体对应属性
+                //        IProperty principalProperty = fk.PrincipalKey?.Properties?.FirstOrDefault(p => p.Name.StartsWith(propertyInfo.Name) ? p.Name == property.Name : propertyInfo.Name + p.Name == property.Name);
+                //        PropertyInfo principalPropertyInfo= principalProperty?.PropertyInfo;
+                //        if (principalPropertyInfo != null)
+                //        {
+                //            return Expression.Property(Expression.Property(parameter, propertyInfo), principalPropertyInfo);
+                //        }
+                //    }
+                //}
+                ///如果能够找到阴影属性的主体对应属性，如果需要支持委托也可运行.需要使用visitor 对表达式进行修改。
+                /// 例如 实体 entity { Name:string ,PropObject:{Id:string,....}}现有表达式  t=>t.Name=="a"&&EF.Property<string>("PropObjectId")==rightExp
+                /// 需要转换为
+                /// {
+                /// bool result;
+                ///    if(rightExp==null)
+                ///    {
+                ///        result=t.PropObject==null;
+                ///    }
+                ///    else
+                ///    {
+                ///         result=t.PropObject!=null&&t.PropObject.Id==rightExp;
+                ///    }
+                ///    t=>t.Name=="a"&&result;
+                /// }
+                ///目前感觉不是必须要此功能
+
+                //该方法只能在linq 查询中运行 ,
+                //建议避免使用阴影属性 ，可能造成不必要的表链接 如果有一个导航属性时 建议同时在该实体定义一个显示的外键属性 （此处生成不会产生多余的表链接）
                 MethodInfo propertyMethod = typeof(EF).GetMethod("Property");
                 propertyMethod = propertyMethod.MakeGenericMethod(property.ClrType);
                 return Expression.Call(propertyMethod, parameter, Expression.Constant(property.Name));

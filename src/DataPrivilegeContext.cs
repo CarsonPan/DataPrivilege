@@ -1,4 +1,4 @@
-﻿using Antlr4.Runtime;
+﻿   using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using DataPrivilege.DataPrivilegeFields;
 using DataPrivilege.Models;
@@ -23,30 +23,7 @@ namespace DataPrivilege
         private static readonly ParameterExpression _parameterExpression = Expression.Parameter(typeof(TEntity), "_p");
         private static readonly ConcurrentDictionary<string, DataPrivilegeInfo<TEntity>> _cache = new ConcurrentDictionary<string, DataPrivilegeInfo<TEntity>>();
 
-        public IList<Exception> Vertify(TRule rule)
-        {
-            if(_cache.TryGetValue(rule.ConditionExpression.ToUpper(),out DataPrivilegeInfo<TEntity> value))
-            {
-                return null;
-            }
-
-            var visitResult = DataPrivilegeVisitor.Visit(Rules[0].ConditionExpression);
-            if(!visitResult.Success)
-            {
-                return visitResult.Exceptions;
-            }
-            ReplacementVisitor visitor = new ReplacementVisitor(Expression.Constant(this), visitResult.PredicateExpression.Parameters[0], _parameterExpression);
-            var newExpression = visitor.Visit(visitResult.PredicateExpression);
-            DataPrivilegeInfo<TEntity> result = new DataPrivilegeInfo<TEntity>(newExpression as Expression<Func<TEntity, bool>>, visitResult.CustomFields);
-            if (!_cache.ContainsKey(rule.ConditionExpression.ToUpper()))
-            {
-                lock(_cache)
-                {
-                    _cache.TryAdd(rule.ConditionExpression.ToUpper(), result);
-                }
-            }
-            return null;
-        }
+       
         private readonly DataPrivilegeVisitor<TDbContext, TEntity> DataPrivilegeVisitor;
         public List<TRule> Rules { get; }
         public TDbContext DbContext { get; }
@@ -93,7 +70,7 @@ namespace DataPrivilege
         {
             return rule.TableName.ToUpper() + "-" + rule.ConditionExpression.ToUpper();
         }
-        public bool CheckAndReduceRule(TRule rule,out IList<Exception> exceptions)
+        public bool VertifyRule(TRule rule,out IList<Exception> exceptions)
         {
             string cacheKey = GetCacheKey(rule);
             if(_cache.ContainsKey(cacheKey))
@@ -114,7 +91,6 @@ namespace DataPrivilege
                 DataPrivilegeInfo<TEntity> result = new DataPrivilegeInfo<TEntity>(newExpression as Expression<Func<TEntity, bool>>, visitResult.CustomFields);
                
                 _cache.TryAdd(cacheKey, result); 
-                  
             }
             return visitResult.Success;
         }
