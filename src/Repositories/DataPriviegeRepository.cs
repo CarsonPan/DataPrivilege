@@ -38,7 +38,7 @@ namespace DataPrivilege.Repositories
         protected T Update<T>(T entity)
             where T:class
         {
-            DbContext.Entry<T>(entity).State = EntityState.Modified;
+            DbContext.Attach<T>(entity).State = EntityState.Modified;
             DbContext.SaveChanges();
             return entity;
         }
@@ -48,7 +48,7 @@ namespace DataPrivilege.Repositories
         {
             foreach (T entity in entities)
             {
-                DbContext.Entry<T>(entity).State = EntityState.Modified;
+                DbContext.Attach<T>(entity).State = EntityState.Modified;
             }
             DbContext.SaveChanges();
             return entities;
@@ -57,7 +57,7 @@ namespace DataPrivilege.Repositories
         protected void Delete<T>(T entity)
             where T : class
         {
-            DbContext.Entry<T>(entity).State = EntityState.Deleted;
+            DbContext.Attach<T>(entity).State = EntityState.Deleted;
             DbContext.SaveChanges();
         }
 
@@ -66,7 +66,7 @@ namespace DataPrivilege.Repositories
         {
             foreach (T entity in entities)
             {
-                DbContext.Entry<T>(entity).State = EntityState.Deleted;
+                DbContext.Attach<T>(entity).State = EntityState.Deleted;
             }
             DbContext.SaveChanges();
         }
