@@ -11,6 +11,6 @@ namespace DataPrivilege.Models
         public string TableName { get; set; }
         public TRule DataPriviegeRule { get; set; }
 
-        public DataOperation DataOperation { get; set; }
+        public DataOperation DataOperation { get; set; } = (DataOperation)15;
     }
 }
