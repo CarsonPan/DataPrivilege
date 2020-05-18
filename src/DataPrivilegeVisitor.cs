@@ -683,7 +683,7 @@ namespace DataPrivilege
             return DbContext.Model.FindEntityType(entityType)?.GetTableName();
         }
 
-        public VisitResult<TEntity> Visit(string conditionExpression)
+        public virtual VisitResult<TEntity> Visit(string conditionExpression)
         {
             Expression<Func<TEntity, bool>> predicate = null;
             IList<Exception> exceptions = null;
