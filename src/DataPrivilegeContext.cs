@@ -55,10 +55,9 @@ namespace DataPrivilege
             }
            
             StringBuilder builder = new StringBuilder();
-            builder.Append(rules[0].TableName.ToUpper()).Append("-");
             for (int i = 0; i < rules.Count; i++)
             {
-                builder.Append("(").Append(rules[i].ConditionExpression).Append(")");
+                builder.Append("(").Append(GetCacheKey(rules[i])).Append(")");
                 if (i != rules.Count - 1)
                 {
                     builder.Append(" OR ");
@@ -68,7 +67,7 @@ namespace DataPrivilege
         }
         private string GetCacheKey(TRule rule)
         {
-            return rule.TableName.ToUpper() + "-" + rule.ConditionExpression.ToUpper();
+            return rule.ConditionExpression.ToUpper();
         }
         public bool VertifyRule(TRule rule,out IList<Exception> exceptions)
         {
