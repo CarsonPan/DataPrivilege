@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 using System.Text;
 using Xunit;
 
-namespace DataPrivilegeTest
+namespace DataPrivilegeTest.Converters
 {
     public class BooleanExpressionConverterTests
     {
