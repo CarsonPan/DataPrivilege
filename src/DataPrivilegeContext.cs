@@ -122,7 +122,7 @@ namespace DataPrivilege
             }
         }
         private DataPrivilegeInfo<TEntity> _dataPrevilegeInfo = null;
-        public DataPrivilegeInfo<TEntity> DataPrivilegeInfo
+        public virtual DataPrivilegeInfo<TEntity> DataPrivilegeInfo
         {
             get
             {

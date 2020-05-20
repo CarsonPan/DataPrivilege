@@ -27,7 +27,7 @@ namespace DataPrivilege
         public TDbContext DbContext { get; set; }
         protected List<Exception> Exceptions = new List<Exception>();
         protected List<string> CustomFields = new List<string>();
-        List<(string AliasName, string TableName, ParameterExpression Parameter)> _tableContainer = new List<(string AliasName, string TableName, ParameterExpression Parameter)>();
+        private  List<(string AliasName, string TableName, ParameterExpression Parameter)> _tableContainer = new List<(string AliasName, string TableName, ParameterExpression Parameter)>();
         protected readonly ExpressionConverter ExpressionConverter;
         protected readonly IDataPrivilegeFieldProvider DataPrivilegeFieldProvider;
         public DataPrivilegeVisitor(ExpressionConverter converter,
@@ -457,6 +457,7 @@ namespace DataPrivilege
             if(!DataPrivilegeFieldProvider.ContainsField(customField))
             {
                 Exceptions.Add(new Exception($"自定义权限字段{customField}不存在！"));
+                return Expression.Constant(null);
             }
             Expression expression = GetCustomFieldValueExpression(customField);
             if (!CustomFields.Contains(customField))
@@ -503,6 +504,8 @@ namespace DataPrivilege
                 NewArrayExpression newArrayExpression = set as NewArrayExpression;
                 List<Expression> list = new List<Expression>();
                 List<Expression> setList = new List<Expression>();
+                //如果右参数中包含自定义字段，并且自定义字段为可枚举类型时 需要拆分为多个表达式 例如  有数组[1,2,4,[subArray]]
+                //转化为[subArray].Contains(p)|| [1,2,4].Contains(p)
                 foreach (Expression itemExpression in newArrayExpression.Expressions)
                 {
                     if (itemExpression.Type != item.Type)
@@ -514,7 +517,7 @@ namespace DataPrivilege
                         }
                         else
                         {
-                            list.Add(Expression.Convert(itemExpression, item.Type));
+                            list.Add(Expression.ConvertChecked(itemExpression, item.Type));
                         }
                     }
                     else
@@ -563,7 +566,7 @@ namespace DataPrivilege
             List<Expression> expressions = new List<Expression>();
             foreach (var child in contexts)
             {
-                expressions.Add(VisitExpression(child));
+                expressions.Add(VisitExpression(child));   
             }
             return Expression.NewArrayInit(typeof(object), expressions);
         }
@@ -579,7 +582,11 @@ namespace DataPrivilege
                 return Expression.Constant(true);
             }
             MethodInfo containsMethod = typeof(string).GetMethod("Contains", new Type[] { typeof(string) });
-            expression = Expression.Call(expression, containsMethod, Expression.Constant(context.STRING()));
+            string value =context.STRING().GetText();
+            int index = value.StartsWith('N') ? 2 : 1;
+            int length = value.Length - index - 1;
+            value = value.Substring(index, length);
+            expression = Expression.Call(expression, containsMethod, Expression.Constant(value));
             if (isNot)
             {
                 expression = Expression.Not(expression);
@@ -704,9 +711,8 @@ namespace DataPrivilege
                 {
                     Exceptions.AddRange(errorListener.Exceptions);
                 }
-                ParameterExpression parameter = Expression.Parameter(typeof(TEntity), "_p");
-                string tableName = GetTableName(typeof(TEntity));
-                _tableContainer.Add((tableName, tableName, parameter));
+                 InitTableContainer();
+                ParameterExpression parameter = GetCurrentParameter();
                 Expression expression = Visit(tree);
                 predicate = Expression.Lambda<Func<TEntity, bool>>(expression, parameter);
             }
@@ -725,6 +731,19 @@ namespace DataPrivilege
 
             return new VisitResult<TEntity>(predicate, exceptions, customFields);
         }
+
+        protected virtual ParameterExpression GetCurrentParameter()
+        {
+            return _tableContainer[_tableContainer.Count - 1].Parameter;
+        }
+
+        protected virtual void InitTableContainer()
+        {
+            ParameterExpression parameter = Expression.Parameter(typeof(TEntity), "_p");
+            string tableName = GetTableName(typeof(TEntity));
+            _tableContainer.Add((tableName, tableName, parameter));
+        }
+
         private class DataPrivilegeErrotListener : IAntlrErrorListener<IToken>, IAntlrErrorListener<int>
         {
             public List<Exception> Exceptions { get; } = new List<Exception>();
