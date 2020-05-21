@@ -186,22 +186,7 @@ namespace DataPrivilege
             switch (op)
             {
                 case "=":
-                    var leftType = typeof(IEnumerable<>).MakeGenericType(left.Type);
-                    var rightType = typeof(IEnumerable<>).MakeGenericType(right.Type);
-                    if (leftType.IsAssignableFrom(right.Type))
-                    {
-                        MethodInfo containsMethod = typeof(Enumerable).GetMethod("Contains", new Type[] { typeof(IEnumerable<>).MakeGenericType(left.Type), left.Type });
-                        expression = Expression.Call(containsMethod, right, left);
-                    }
-                    else if (rightType.IsAssignableFrom(left.Type))
-                    {
-                        MethodInfo containsMethod = typeof(Enumerable).GetMethod("Contains", new Type[] { typeof(IEnumerable<>).MakeGenericType(right.Type), right.Type });
-                        expression = Expression.Call(containsMethod, left, right);
-                    }
-                    else
-                    {
-                        expression = Expression.Equal(left, right);
-                    }
+                    VisitEquals(left, right, out expression);
                     break;
                 case ">":
                     expression = Expression.GreaterThan(left, right);
@@ -218,12 +203,34 @@ namespace DataPrivilege
                     expression = Expression.GreaterThan(left, right);
                     break;
                 default:
-                    expression = Expression.NotEqual(left, right);
+                    VisitEquals(left, right, out expression);
+                    expression = Expression.Not(expression);
                     break;
             }
             return expression;
         }
 
+        private static void VisitEquals(Expression left, Expression right, out Expression expression)
+        {
+            Type leftType = typeof(IEnumerable<>).MakeGenericType(left.Type);
+            Type rightType = typeof(IEnumerable<>).MakeGenericType(right.Type);
+            if (leftType.IsAssignableFrom(right.Type))
+            {
+                MethodInfo containsMethod = typeof(Enumerable).GetMethods().FirstOrDefault(m => m.Name == "Contains" && m.GetParameters()?.Length == 2);
+                containsMethod = containsMethod.MakeGenericMethod(left.Type);
+                expression = Expression.Call(containsMethod, right, left);
+            }
+            else if (rightType.IsAssignableFrom(left.Type))
+            {
+                MethodInfo containsMethod = typeof(Enumerable).GetMethods().FirstOrDefault(m => m.Name == "Contains" && m.GetParameters()?.Length == 2);
+                containsMethod = containsMethod.MakeGenericMethod(right.Type);
+                expression = Expression.Call(containsMethod, left, right);
+            }
+            else
+            {
+                expression = Expression.Equal(left, right);
+            }
+        }
 
         private Expression GetTableExpression(string tableName)
         {
@@ -470,7 +477,7 @@ namespace DataPrivilege
         public override Expression VisitGetDateExpression(DataPrivilegeParser.GetDateExpressionContext context)
         {
             AddExceptionIfExists(context);
-            return Expression.Constant(DateTime.Now);
+            return Expression.Property(null, typeof(DateTime),"Now");
         }
 
         public override Expression VisitBetweenAndExpression(DataPrivilegeParser.BetweenAndExpressionContext context)

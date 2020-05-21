@@ -22,6 +22,8 @@ namespace DataPrivilegeTest
 
         public DbSet<TestEntity> TestEntities { get; set; }
 
+        public DbSet<TestRelation> TestRelations { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ConfigureDataPrivilegeStore<TRule, TRuleRole, TRuleUser>();
@@ -53,7 +55,7 @@ namespace DataPrivilegeTest
         public byte? NullableByteProp { get; set; }
         public bool? NullableBoolProp { get; set; }
 
-   
+       public string ShadowPropId { get; set; }
         public TestRelation ShadowProp { get; set; }
 
         //public ICollection<TestMultiple> TestMultiples { get; set; }
