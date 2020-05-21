@@ -200,7 +200,7 @@ namespace DataPrivilege
                     break;
                 case ">=":
                 case "!<":
-                    expression = Expression.GreaterThan(left, right);
+                    expression = Expression.GreaterThanOrEqual(left, right);
                     break;
                 default:
                     VisitEquals(left, right, out expression);
